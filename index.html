@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>me2.do API Caller</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.3.0/semantic.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.5.21/vue.min.js"></script>
+    <script src="https://unpkg.com/semantic-ui-vue/dist/umd/semantic-ui-vue.min.js"></script>    
+    <style>
+      #app {
+        padding-top: 20px;
+        padding-bottom: 40px;
+      }
+    </style>
+  </head>
+  <body>
+    <sui-container id="app">
+      <sui-form @submit.prevent="call">
+        <sui-form-field>
+          <label>URL</label>
+          <input type="url" placeholder="https://www.naver.com" v-model="url" required>
+        </sui-form-field>
+        <sui-form-field class="field">
+          <label>Client Id</label>
+          <input type="text" v-model="clientId" required>
+        </sui-form-field>
+        <sui-form-field class="field">
+          <label>Client Secret</label>
+          <input type="text" v-model="clientSecret" required>
+        </sui-form-field>
+        <sui-button primary :disabled="reqBtn.disabled" :loading="reqBtn.loading" type="submit" icon="telegram plane">요청</sui-button>
+      </sui-form>
+
+      <sui-divider v-if="message || shortendUrls.length > 0"></sui-divider>
+      <sui-message
+        v-if="message"
+        header="알림"
+        :content="message"
+        info
+        icon="info circle"
+        id="message"
+      ></sui-message>
+
+      <div v-if="shortendUrls.length > 0">
+        <sui-button primary @click="saveList" icon="save" :loading="saveBtn.loading" :disabled="saveBtn.disabled">목록 저장</sui-button>
+        <sui-button secondary @click="resetList" icon="trash">목록 초기화</sui-button>        
+        <sui-table celled>
+          <sui-table-header>
+            <sui-table-row>
+              <sui-table-header-cell>원본</sui-table-header-cell>
+              <sui-table-header-cell>단축</sui-table-header-cell>
+            </sui-table-row>
+          </sui-table-header>
+          <sui-table-body v-for="obj in shortendUrls">
+            <sui-table-row>
+              <sui-table-cell><a :href="obj.orgUrl" target="_blank">{{obj.orgUrl}}</a></sui-table-cell>
+              <sui-table-cell><a :href="obj.url" target="_blank">{{obj.url}}</a></sui-table-cell>
+            </sui-table-row>
+          </sui-table-body>
+        </sui-table>
+      </div>
+    </sui-container>
+
+    <script>
+      const { ipcRenderer } = require('electron')
+      const { dialog } = require('electron').remote
+
+      Vue.use(SemanticUIVue);
+      var app = new Vue({
+        el: '#app',
+        data: {
+          url: '',
+          clientId: '',
+          clientSecret: '',
+          shortendUrls: [],
+          reqBtn: {
+            disabled: false,
+            loading: false
+          },
+          saveBtn: {
+            disabled: false,
+            loading: false,
+          },
+          message: ''
+        },
+        methods: {
+          call() {
+            if(this.reqBtn.disabled || this.reqBtn.loading) {
+              return
+            }
+
+            this.reqBtn.disabled = true
+            this.reqBtn.loading = true
+            this.message = '작업중...'
+
+            //node.js에게 url 단축하라고 명령을 보냅니다.
+            ipcRenderer.send('shorten', {
+              url: this.url,
+              clientId: this.clientId,
+              clientSecret: this.clientSecret
+            })
+          },
+          resetList() {
+            this.shortendUrls = []
+            this.setMessage("목록을 초기화했습니다.")
+          },
+          saveList() {
+            if(!this.shortendUrls || this.shortendUrls.length <= 0 || this.saveBtn.disabled || this.saveBtn.loading) {
+              return
+            }
+
+            //파일저장 창을 뛰워서 저장경로를 가져옵니다.
+            const filename = dialog.showSaveDialog(null, {
+              title:'단축URL 목록 저장',
+              defaultPath: `단축URL-${Date.now()}.txt`,
+              filters: [{
+                name: '텍스트 파일',
+                extensions: ['txt']
+              }]
+            })
+
+            if(!filename) {
+              return
+            }
+
+            this.saveBtn.disabled = true
+            this.saveBtn.loading = true
+            this.setMessage('목록 저장중...')
+
+            //node.js에게 단축 url 목록을 저장하라고 명령합니다.
+            ipcRenderer.send('saveList', {
+              filename,
+              urls: this.shortendUrls
+            })
+          },
+          setMessage(msg) {
+            this.message = msg
+            window.location.href = "#message"
+          }
+        }
+      })
+
+      ipcRenderer.on('shorten-done', (event, arg) => {
+        //node.js에서 url 단축을 완료했을때 호출되는 콜백입니다.
+
+        if(arg.err) {
+          if(arg.err.response.status == 401) {
+            app.setMessage(`클라이언트 아이디와 클라이언트 시크릿이 없거나 잘못된 값인것같습니다.`)
+          } else if(arg.err.response.status == 429) {
+            app.setMessage(`API 호출 한도를 초과했습니다.`)
+          } else {
+            app.setMessage(`작업도중 오류가 발생했습니다.`)
+          }         
+        } else {
+          app.shortendUrls.unshift(arg.result)
+          app.setMessage(`작업완료!`)
+        }
+        
+        app.reqBtn.loading = false
+        app.reqBtn.disabled = false
+      })
+
+      ipcRenderer.on('saveList-done', (event, arg) => {
+        //node.js에서 단축 url 목록을 저장했으면 호출되는 콜백입니다.
+
+        if(arg.err) {
+          app.setMessage('목록 저장중에 오류가 발생했습니다.')
+        } else {
+          app.setMessage(`목록 저장완료! ${arg.filename}`)
+        }
+        
+        app.saveBtn.loading = false
+        app.saveBtn.disabled = false
+      })
+    </script>
+
+  </body>
+</html>

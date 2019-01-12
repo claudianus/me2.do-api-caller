@@ -1,0 +1,63 @@
+{
+  "name": "me2.do-api-caller",
+  "version": "1.0.0",
+  "description": "me2.do urlshortener api caller",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron .",
+    "dist": "electron-builder",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": {
+    "name": "Claudianus Mamertus",
+    "email": "claudianus@engineer.com"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "async": "^2.6.1",
+    "axios": "^0.18.0"
+  },
+  "devDependencies": {
+    "electron": "^4.0.1",
+    "electron-builder": "^20.38.4"
+  },
+  "build": {
+    "productName": "me2.do-api-caller",
+    "appId": "claudianus.electron.me2.do-api-caller",
+    "asar": true,
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "./resources/icon.icns"
+    },
+    "dmg": {
+      "title": "me2.do-api-caller",
+      "icon": "./resources/icon.icns"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "./resources/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "./resources/icon.icns"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false
+    },
+    "directories": {
+      "buildResources": "./resources/",
+      "output": "dist/",
+      "app": "."
+    }
+  }
+}
